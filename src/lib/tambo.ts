@@ -14,6 +14,10 @@ import RecipeCard from "@/components/RecipeCard";
 import HabitCard from "@/components/Habit";
 import IssueTrackerCard from "@/components/CodeIssueTracker";
 import JobTrackerCard from "@/components/JobTracker";
+import DevDashboard from "@/components/DashBoard";
+import HabitAnalyzer from "@/components/HabitAnalyzer";
+import CodeIssueAnalyzer from "@/components/CodeAnalyzer";
+import JobRejectionAnalyzer from "@/components/JobAnalyzer";
 import {
   getCountryPopulations,
   getGlobalPopulationTrend,
@@ -26,7 +30,10 @@ import { createTracker } from "@/services/intent-tools/createTracker";
 import { createHabitTracker } from "@/services/intent-tools/createHabitTracker";
 import { createIssueTracker } from "@/services/intent-tools/createIssueTracker";
 import { createJobTracker } from "@/services/intent-tools/createJobTracker";
-
+import { buildDashboard } from "@/services/intent-tools/buildDashboard";
+import { analyzeHabit } from "@/services/intent-tools/analyzeHabit";
+import { analyzeCodeIssue } from "@/services/intent-tools/analyzeCodeIssue";
+import { analyzeJobRejections } from "@/services/intent-tools/analyzeJobRejections";
 /**
  * tools
  *
@@ -136,10 +143,10 @@ export const tools: TamboTool[] = [
   {
     name: "createHabitTracker",
     description:
-      "Creates a habit tracker card for a single habit that the user wants to track daily.",
+      "Creates a habit tracker entry for a habit the user wants to track daily.",
     tool: createHabitTracker,
     inputSchema: z.object({
-      habit: z.string().describe("The habit the user wants to track"),
+      habitName: z.string(),
     }),
     outputSchema: z.object({
       habitName: z.string(),
@@ -196,6 +203,119 @@ export const tools: TamboTool[] = [
       ]),
       interviewDate: z.string().optional(),
       location: z.string(),
+    }),
+  },
+  {
+    name: "buildDashboard",
+    description:
+      "Builds a system overview dashboard by aggregating job trackers, habit trackers, and engineering issue trackers.",
+    tool: buildDashboard,
+    inputSchema: z.object({}),
+    outputSchema: z.object({
+      dateLabel: z.string(),
+      jobs: z.array(
+        z.object({
+          company: z.string(),
+          role: z.string(),
+          status: z.enum([
+            "Applied",
+            "Waiting",
+            "Rejected",
+            "Heard Back",
+            "Interview",
+          ]),
+          interviewDate: z.string().optional(),
+          location: z.string().optional(),
+        }),
+      ),
+      habits: z.array(
+        z.object({
+          habitName: z.string(),
+          initialDate: z.string(),
+        }),
+      ),
+      issues: z.array(
+        z.object({
+          issueId: z.string(),
+          title: z.string(),
+          source: z.enum(["local", "github"]),
+          priority: z.enum(["low", "medium", "high"]),
+          labels: z.array(z.string()),
+        }),
+      ),
+    }),
+  },
+  {
+    name: "analyzeHabit",
+    description:
+      "Analyzes habit completion history and identifies consistency trends and common blockers.",
+    tool: analyzeHabit,
+    inputSchema: z.object({
+      habitName: z.string(),
+      history: z.array(
+        z.object({
+          date: z.string(),
+          completed: z.number(),
+          reason: z.string().optional(),
+        }),
+      ),
+    }),
+    outputSchema: z.object({
+      habitName: z.string(),
+      data: z.array(
+        z.object({
+          date: z.string(),
+          completed: z.number(),
+          reason: z.string(),
+        }),
+      ),
+      reasons: z.array(z.string()),
+    }),
+  },
+  {
+    name: "analyzeCodeIssue",
+    description:
+      "Analyzes a reported code issue or repository problem and generates a structured resolution plan.",
+    tool: analyzeCodeIssue,
+    inputSchema: z.object({
+      issueName: z.string(),
+      repoName: z.string(),
+      source: z.enum(["github", "local"]).optional(),
+    }),
+    outputSchema: z.object({
+      issueName: z.string(),
+      repoName: z.string(),
+      issueLink: z.string(),
+      source: z.enum(["github", "local"]),
+      steps: z.array(z.string()),
+    }),
+  },
+  {
+    name: "analyzeJobRejections",
+    description:
+      "Analyzes job application history and extracts rejection patterns by role.",
+    tool: analyzeJobRejections,
+    inputSchema: z.object({
+      applications: z.array(
+        z.object({
+          role: z.string(),
+          status: z.enum([
+            "Applied",
+            "Waiting",
+            "Rejected",
+            "Heard Back",
+            "Interview",
+          ]),
+        }),
+      ),
+    }),
+    outputSchema: z.object({
+      rejectionData: z.array(
+        z.object({
+          role: z.string(),
+          count: z.number(),
+        }),
+      ),
     }),
   },
 ];
@@ -272,15 +392,11 @@ export const components: TamboComponent[] = [
   {
     name: "HabitCard",
     description:
-      "Displays a habit tracker card where the user can mark a habit as done or missed for a specific date.",
+      "Displays a habit tracker card where the user can mark a habit as done or missed and optionally provide a reason.",
     component: HabitCard,
     propsSchema: z.object({
-      habitName: z.string().describe("The name of the habit being tracked"),
-      initialDate: z
-        .string()
-        .describe(
-          "The date for which the habit is tracked, formatted as a readable string",
-        ),
+      habitName: z.string(),
+      initialDate: z.string(),
     }),
   },
   {
@@ -320,6 +436,90 @@ export const components: TamboComponent[] = [
       ]),
       interviewDate: z.string().optional(),
       location: z.string(),
+    }),
+  },
+  {
+    name: "DevDashboard",
+    description:
+      "Renders a unified dashboard combining job trackers, habit trackers, and engineering issue trackers into a single system overview.",
+    component: DevDashboard,
+    propsSchema: z.object({
+      jobs: z.array(
+        z.object({
+          company: z.string(),
+          role: z.string(),
+          status: z.enum([
+            "Applied",
+            "Waiting",
+            "Rejected",
+            "Heard Back",
+            "Interview",
+          ]),
+          interviewDate: z.string().optional(),
+          location: z.string().optional(),
+        }),
+      ),
+      habits: z.array(
+        z.object({
+          habitName: z.string(),
+          initialDate: z.string(),
+        }),
+      ),
+      issues: z.array(
+        z.object({
+          issueId: z.string(),
+          title: z.string(),
+          description: z.string().optional(),
+          source: z.enum(["local", "github"]),
+          priority: z.enum(["low", "medium", "high"]),
+          labels: z.array(z.string()).optional(),
+        }),
+      ),
+      dateLabel: z.string(),
+    }),
+  },
+  {
+    name: "HabitAnalyzer",
+    description:
+      "Analyzes a habit over time, showing consistency trends and the most common reasons for missed days.",
+    component: HabitAnalyzer,
+    propsSchema: z.object({
+      habitName: z.string(),
+      data: z.array(
+        z.object({
+          date: z.string(),
+          completed: z.number(), // 1 or 0
+          reason: z.string().optional(),
+        }),
+      ),
+      reasons: z.array(z.string()),
+    }),
+  },
+  {
+    name: "CodeIssueAnalyzer",
+    description:
+      "Analyzes a code or repository issue and presents a step-by-step resolution checklist with progress tracking.",
+    component: CodeIssueAnalyzer,
+    propsSchema: z.object({
+      issueName: z.string(),
+      repoName: z.string(),
+      issueLink: z.string(),
+      source: z.enum(["github", "local"]),
+      steps: z.array(z.string()),
+    }),
+  },
+  {
+    name: "JobRejectionAnalyzer",
+    description:
+      "Analyzes job rejection patterns across roles and highlights the most common rejection areas.",
+    component: JobRejectionAnalyzer,
+    propsSchema: z.object({
+      rejectionData: z.array(
+        z.object({
+          role: z.string(),
+          count: z.number(),
+        }),
+      ),
     }),
   },
 ];

@@ -1,10 +1,6 @@
-export async function createHabitTracker({ habit }) {
+export async function createHabitTracker({ habitName }) {
   return {
-    habitName: habit,
-    initialDate: new Date().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
+    habitName,
+    initialDate: new Date().toLocaleDateString(),
   };
 }

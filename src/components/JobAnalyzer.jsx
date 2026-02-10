@@ -22,7 +22,7 @@ export default function JobRejectionAnalyzer({
   const totalRejections = sortedData.reduce((acc, curr) => acc + curr.count, 0);
 
   return (
-    <div className="max-w-2xl w-full bg-white border border-slate-200 rounded-[2rem] p-8 shadow-xl">
+    <div className="max-w-2xl w-full bg-white border border-slate-200 round-[2rem] p-8 shadow-xl">
       {/* Header Section */}
       <div className="flex items-center justify-between mb-8">
         <div>
